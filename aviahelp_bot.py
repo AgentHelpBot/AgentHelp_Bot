@@ -39,20 +39,14 @@ def handle_message(message):
     for idx, segment in enumerate(segments):
         parsed = parse_segment(segment)
         if parsed:
-            response = f"Вариант {idx + 1} - {parsed['to']}\n"
-            response += f"Туда: {parsed['date']}, {parsed['departure']} – {parsed['arrival']}, "
-            response += f"{parsed['from']} → {parsed['to']}, {parsed['flight']}, {parsed['airline']}. "
-            response += f"В пути {parsed['duration']}\n"
-            response += "⬅️ Обратно: (указать вручную)\n\n"
-            response += "Цена: ________ тенге\n"
-            response += "Багаж: Включён / Только ручная кладь\n"
-            response += "Возврат билета: Штраф ___ USD / Без штрафа\n"
-            response += "Замена даты: Штраф ___ USD / Без штрафа\n"
-            response += "Примечание: __________________________\n"
-            responses.append(response)
-    if responses:
-        bot.reply_to(message, "\n\n".join(responses))
-    else:
-        bot.reply_to(message, "Не удалось распознать данные о рейсах. Убедитесь, что вы отправили стандартные GDS-сегменты.")
-bot.infinity_polling()
-Update bot code
+    response = f"Вариант {idx + 1} - {parsed['to']}\n"
+    response += f"Туда: {parsed['date']}, {parsed['departure']} – {parsed['arrival']}, "
+    response += f"{parsed['from']} → {parsed['to']}, {parsed['flight']}, {parsed['airline']}. "
+    response += f"В пути {parsed['duration']}\n"
+    response += "⬅️ Обратно: (указать вручную)\n\n"
+    response += "Цена: ________ тенге\n"
+    response += "Багаж: Включён / Только ручная кладь\n"
+    response += "Возврат билета: Штраф ___ USD / Без штрафа\n"
+    response += "Замена даты: Штраф ___ USD / Без штрафа\n"
+    response += "Примечание: __________________________\n"
+    responses.append(response)
