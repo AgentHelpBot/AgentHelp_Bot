@@ -38,7 +38,7 @@ def handle_message(message):
     responses = []
     for idx, segment in enumerate(segments):
         parsed = parse_segment(segment)
-        if parsed:
+    if parsed:
     response = f"Вариант {idx + 1} - {parsed['to']}\n"
     response += f"Туда: {parsed['date']}, {parsed['departure']} – {parsed['arrival']}, "
     response += f"{parsed['from']} → {parsed['to']}, {parsed['flight']}, {parsed['airline']}. "
