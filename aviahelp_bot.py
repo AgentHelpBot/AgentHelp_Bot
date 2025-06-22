@@ -1,13 +1,14 @@
-
 import telebot
 import re
+import os
 from datetime import datetime, timedelta
 
-bot = telebot.TeleBot("7822043938:AAH_nWKs1EW9afmn5HkiXcKSDuAgFZ7jU98")
+# Получаем токен из переменной окружения (безопасно)
+bot = telebot.TeleBot(os.environ.get("TELEGRAM_TOKEN", "YOUR_FALLBACK_TOKEN"))
 
 def parse_segment(segment):
     pattern = r"(\d+)\s+(\w{2})\s+(\w)\s+(\d{2}\w{3})\s+(\d)\s+(\w{6})\s+\w{2}\d\s+(\d{4})\s+(\d{4})"
-    match = re.match(pattern, segment.strip())
+    match = re.search(pattern, segment.replace("\n", " ").strip())
     if not match:
         return None
 
@@ -38,12 +39,14 @@ def parse_segment(segment):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    segments = re.findall(r"\d+\s+\w{2}\s+\w\s+\d{2}\w{3}\s+\d\s+\w{6}\s+\w{2}\d\s+\d{4}\s+\d{4}", message.text)
+    text = message.text.replace("\n", " ")
+    segments = re.findall(r"\d+\s+\w{2}\s+\w\s+\d{2}\w{3}\s+\d\s+\w{6}\s+\w{2}\d\s+\d{4}\s+\d{4}", text)
     responses = []
     for idx, segment in enumerate(segments):
         parsed = parse_segment(segment)
         if parsed:
-            response = f"Вариант {idx + 1} - {parsed['to']}\n\n"
+            response = f"Вариант {idx + 1} - {parsed['to']}
+\n"
             response += f"Туда: {parsed['date']}, {parsed['departure']} – {parsed['arrival']}, "
             response += f"{parsed['from']} → {parsed['to']}, {parsed['flight']}, {parsed['airline']}. "
             response += f"В пути {parsed['duration']}\n"
@@ -60,3 +63,4 @@ def handle_message(message):
         bot.reply_to(message, "Не удалось распознать данные о рейсах. Убедитесь, что вы отправили стандартные GDS-сегменты.")
 
 bot.infinity_polling()
+Update bot code
