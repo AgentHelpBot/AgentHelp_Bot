@@ -1,2 +1,2 @@
 pyTelegramBotAPI==4.27.0
-airportsdata==2024.5
+airportsdata>=2023.8
