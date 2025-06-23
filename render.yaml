@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type:  web
     name: agenthelpbot
     env: python
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
