@@ -1,154 +1,133 @@
-# ── aviahelp_bot.py ──────────────────────────────────────────────────────────
-import os
-import re
-import logging
+import os, re, logging
 from datetime import datetime, timedelta
+from aiogram import Bot, Dispatcher, executor, types
+from airportsdata import load           # база аэропортов IATA → данные
+from dateutil import parser as dtparse  # умный разбор дат
 
-import telebot                       # pip install pyTelegramBotAPI
-from airportsdata import airports     # pip install airportsdata
+API_TOKEN = os.getenv("TELEGRAM_TOKEN", "PASTE_YOUR_TOKEN_HERE")
+bot = Bot(API_TOKEN)
+dp  = Dispatcher(bot)
 
-# ─────────────────────────  НАСТРОЙКИ  ───────────────────────────────────────
-TOKEN = os.getenv("TELEGRAM_TOKEN", "YOUR_FALLBACK_TOKEN")
-BOT    = telebot.TeleBot(TOKEN, parse_mode="Markdown")
-
-# airports() возвращает dict: {'ALA': {...}, 'FRA': {...}, ...}
-AIRPORTS = airports()                # кэшируется в памяти
-
-# Мини-словарик авиакомпаний.  Если нет в списке – вернём сам код.
+# ───────────────────────────────────────────────────────────────
+#  Справочник авиакомпаний (код → рус, англ). Добавь при желании.
+# ───────────────────────────────────────────────────────────────
 AIRLINES = {
-    "LH": "Lufthansa",
-    "KC": "Air Astana",
-    "SU": "Aeroflot",
-    "TK": "Turkish Airlines",
-    "HY": "Uzbekistan Airways",
-    # …добавляйте по мере надобности
+    "LH": ("Lufthansa",          "Lufthansa"),
+    "KC": ("Эйр Астана",         "Air Astana"),
+    "CZ": ("China Southern",     "China Southern Airlines"),
+    "CA": ("Air China",          "Air China"),
+    # … дополняй по мере надобности …
 }
-# ─────────────────────────────────────────────────────────────────────────────
 
-logging.basicConfig(level=logging.INFO)
+#  База аэропортов: code → {"city":"Almaty", "name":"Almaty Airport", …}
+AIRPORTS = load("IATA")         # подгружается 1 раз при старте
 
-WELCOME_RU = (
-    "👋 Привет! Я *AgentHelpBot*.\n"
-    "Этот бот создан для помощи авиа-агентам в расшифровке GDS-сегментов: "
-    "маршрутов, дат, кодов и других данных.\n"
-    "Сейчас бот работает абсолютно бесплатно и доступен 24/7.\n\n"
-    "Просто пришлите мне текст бронирования (можно сразу несколько сегментов) — "
-    "и я все разложу «по полочкам» 🙂"
+# ───────────────────────────────────────────────────────────────
+WELCOME = (
+    "👋 Привет! Я AgentHelpBot.\n"
+    "Этот бот создан для помощи авиат-агентам в расшифровке GDS-сегментов, "
+    "маршрутов, дат, кодов и других данных.\n\n"
+    "Бот пока работает абсолютно бесплатно и доступен 24/7.\n\n"
+    "Просто пришлите мне текст бронирования — и я всё объясню на человеческом 😊"
 )
 
-WELCOME_EN = (
-    "👋 Hello! I’m *AgentHelpBot*.\n"
-    "This bot helps travel agents decode GDS segments, routes, dates, airline "
-    "codes and more.\n"
-    "It’s currently completely free and available 24/7.\n\n"
-    "Just send me the booking text (one or many segments) and I’ll explain it "
-    "in plain language."
+SEG_RE = re.compile(
+    r"^\s*\d+\s+"           # порядковый номер
+    r"(?P<flight_num>\w{2})\s*"          # код авиакомпании
+    r"(?P<number>\d+)\s+"                # номер рейса
+    r"(?P<class>\w)\s+"                  # класс брони
+    r"(?P<date>\d{2}[A-Z]{3})\s+"        # дата (24AUG)
+    r"(?P<dow>\d)\s+"                    # день недели
+    r"(?P<rout>[A-Z]{6})\s+"             # ALAFRA
+    r".*?\s(?P<dep>\d{4})\s+(?P<arr>\d{4})",  # время вылета / прилёта
+    re.I
 )
 
-# ---------------------------------------------------------------------------#
-#  ШАБЛОНЫ РЕГУЛЯРНЫХ ВЫРАЖЕНИЙ                                               #
-# ---------------------------------------------------------------------------#
-SEGMENT_RE = re.compile(
-    r"""
-    (?P<index>\d+)\s+                       # порядковый номер
-    (?P<airline>[A-Z0-9]{2})\s+             # код авиакомпании
-    (?P<flight>\d{1,4})\s+                  # номер рейса
-    (?P<class>[A-Z])\s+                     # класс бронирования
-    (?P<dep_date>\d{2}[A-Z]{3})\s+\d+\s+    # дата вылета + день недели
-    (?P<route>[A-Z]{6})\s+                 # 6-симв. код аэропорты (ALA*FRA*)
-    \S+\s+                                 # статус (DK1 / HK2 …) — пропускаем
-    (?P<dep_time>\d{4})\s+                 # время вылета
-    (?P<arr_time>\d{4})                    # время прилёта
-    """,
-    re.VERBOSE,
-)
+def fmt_airport(code: str) -> str:
+    data = AIRPORTS.get(code)
+    if not data:
+        return code.upper()
+    city = data["city"]
+    return f"{city} ({code.upper()})"
 
-# ---------------------------------------------------------------------------#
-#  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ                                                    #
-# ---------------------------------------------------------------------------#
-def lookup_airport(iata: str) -> str:
-    """Возвращает 'Город (Аэропорт)' по коду IATA."""
-    info = AIRPORTS.get(iata)
-    if not info:
-        return iata
-    city  = info["city"]
-    name  = info["name"]
-    return f"{city} ({name})"
+def fmt_airline(code: str) -> str:
+    ru, en = AIRLINES.get(code.upper(), (code.upper(), code.upper()))
+    return ru
 
-def lookup_airline(code: str) -> str:
-    return AIRLINES.get(code, code)
+def calc_duration(dep: str, arr: str) -> str:
+    t1 = datetime.strptime(dep, "%H%M")
+    t2 = datetime.strptime(arr, "%H%M")
+    if t2 < t1:
+        t2 += timedelta(days=1)
+    dur = t2 - t1
+    h, m = divmod(dur.seconds // 60, 60)
+    return f"{h} ч {m:02d} мин"
 
-def parse_segment(text: str) -> dict | None:
-    m = SEGMENT_RE.search(text.upper().replace(" ", " "))   # NB: убираем не-break space
-    if not m:
-        return None
+def parse_block(block: str):
+    """Вернёт список dict'ов по одному на сегмент."""
+    segs = []
+    for line in block.splitlines():
+        m = SEG_RE.match(line)
+        if not m:
+            continue
+        gd = m.groupdict()
+        date = dtparse.parse(gd["date"]).date()
+        segs.append({
+            "airline":   gd["flight_num"].upper(),
+            "flight":    f"{gd['flight_num'].upper()} {gd['number']}",
+            "date":      date,
+            "from":      gd["rout"][:3],
+            "to":        gd["rout"][3:],
+            "dep":       gd["dep"],
+            "arr":       gd["arr"],
+            "duration":  calc_duration(gd["dep"], gd["arr"]),
+        })
+    return segs
 
-    data = m.groupdict()
-    dep_air, arr_air = data["route"][:3], data["route"][3:]
-    dep_time = datetime.strptime(data["dep_time"], "%H%M")
-    arr_time = datetime.strptime(data["arr_time"], "%H%M")
-    if arr_time < dep_time:                # прилёт «на след. день»
-        arr_time += timedelta(days=1)
-    duration = arr_time - dep_time
-
-    return {
-        "variant": data["index"],
-        "airline_code": data["airline"],
-        "airline":      lookup_airline(data["airline"]),
-        "flight":       f'{data["airline"]}{data["flight"]}',
-        "dep_date":     data["dep_date"],
-        "from_code":    dep_air,
-        "from_full":    lookup_airport(dep_air),
-        "to_code":      arr_air,
-        "to_full":      lookup_airport(arr_air),
-        "dep_time":     dep_time.strftime("%H:%M"),
-        "arr_time":     arr_time.strftime("%H:%M"),
-        "duration":     f"{duration.seconds//3600}ч {(duration.seconds//60)%60:02d}м",
-    }
-
-def format_reply(info: dict) -> str:
-    """Собирает красивый блок для одного варианта."""
-    return (
-        f"Вариант {info['variant']}  –  {info['to_code']}\n\n"
-        f"Туда: {info['dep_date']}, {info['dep_time']} – {info['arr_time']}, "
-        f"{info['from_code']} → {info['to_code']}, {info['flight']}, {info['airline']}.\n"
-        f"В пути {info['duration']}\n"
-        f"⬅️ Обратно: (указать вручную)\n\n"
-        f"Цена: ____ ₸ / $ / €\n"
-        f"Класс: Эконом / Бизнес\n"
-        f"Багаж: Включён / Только ручная кладь\n"
-        f"Возврат билета: Без штрафа / Штраф _ USD\n"
-        f"Перенос даты: Без штрафа / Штраф _ USD\n"
-        f"Примечание: __________\n"
+def build_reply(variant_id: int, segs: list) -> str:
+    if not segs:
+        return ""
+    first = segs[0]
+    title_city = fmt_airport(segs[-1]["to"])
+    lines = [f"Вариант №{variant_id} — {title_city}"]
+    for s in segs:
+        date_str = s["date"].strftime("%d %b").lower()
+        line = (
+            f"{date_str}, {s['dep'][:2]}:{s['dep'][2:]} – {s['arr'][:2]}:{s['arr'][2:]}, "
+            f"{fmt_airport(s['from'])} — {fmt_airport(s['to'])}, {s['flight']}, "
+            f"{fmt_airline(s['airline'])}. {s['duration']}"
+        )
+        lines.append(line)
+    lines.append(
+        "Цена: _____\n"
+        "Штраф: за возврат билета: _____\n"
+        "Штраф: за замену даты: _____\n"
+        "Примечание: __________\n"
     )
+    return "\n".join(lines)
 
-# ---------------------------------------------------------------------------#
-#  ОБРАБОТЧИКИ СООБЩЕНИЙ                                                     #
-# ---------------------------------------------------------------------------#
-@BOT.message_handler(commands=['start'])
-def cmd_start(msg: telebot.types.Message) -> None:
-    BOT.send_message(msg.chat.id, f"{WELCOME_RU}\n\n---\n\n{WELCOME_EN}")
+# ───────────────────────────────────────────────────────────────
+@dp.message_handler(commands=["start"])
+async def send_welcome(msg: types.Message):
+    await msg.answer(WELCOME, parse_mode="Markdown")
 
-@BOT.message_handler(func=lambda m: True)
-def handle_text(msg: telebot.types.Message) -> None:
-    segments = SEGMENT_RE.findall(msg.text.upper())
-    if not segments:
-        BOT.reply_to(msg, "❗️ Не удалось найти GDS-сегменты в сообщении.")
-        return
-
-    # нужно снова прогнать через re.finditer, чтобы получить полные строки
+@dp.message_handler()
+async def handle(msg: types.Message):
+    text = msg.text.strip()
+    # делим варианты по пустой строке ИЛИ смене порядкового номера «1 », «2 »…
+    blocks = re.split(r"\n\s*\n", text)
     replies = []
-    for match in SEGMENT_RE.finditer(msg.text.upper()):
-        parsed = parse_segment(match.group(0))
-        if parsed:
-            replies.append(format_reply(parsed))
+    for idx, blk in enumerate(blocks, 1):
+        segs = parse_block(blk)
+        if segs:
+            replies.append(build_reply(idx, segs))
+    if replies:
+        await msg.answer("\n\n".join(replies), parse_mode="Markdown")
+    else:
+        await msg.reply("Не смог понять сегменты 😕\n"
+                        "Пришли мне стандартные строки бронирования.")
 
-    BOT.reply_to(msg, "\n\n".join(replies))
-
-# ---------------------------------------------------------------------------#
-#  ЗАПУСК ПУЛЛИНГА                                                           #
-# ---------------------------------------------------------------------------#
+# ───────────────────────────────────────────────────────────────
 if _name_ == "_main_":
-    logging.info("Bot started…")
-    BOT.infinity_polling(skip_pending=True)
-# ─────────────────────────────────────────────────────────────────────────────
+    logging.basicConfig(level=logging.INFO)
+    executor.start_polling(dp, skip_updates=True)
