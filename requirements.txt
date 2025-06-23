@@ -1,4 +1,4 @@
 aiogram==2.24
 aiohttp==3.8.4
 airportsdata
-python-dateuti
+python-dateutil==2.8.2
