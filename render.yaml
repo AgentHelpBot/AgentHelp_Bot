@@ -1,0 +1,9 @@
+ render.yaml
+ services:
+  - type: web
+    name: agenthelpbot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python aviahelp_bot.py
+    runtime: python
+    pythonVersion: 3.10
