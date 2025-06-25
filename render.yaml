@@ -1,8 +1,9 @@
 services:
   - type: web
-    name: agenthelpbot
+    name: AgentHelp
     env: python
+    runtime: python
+    pythonVersion: 3.10.13
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: python aviahelp_bot.py
-    pythonVersion: 3.10.13
     plan: free
