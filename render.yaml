@@ -1,7 +1,6 @@
 services:
   - type: web
     name: AgentHelp
-    env: python
     runtime: python
     pythonVersion: 3.10.13
     buildCommand: pip install -r requirements.txt
