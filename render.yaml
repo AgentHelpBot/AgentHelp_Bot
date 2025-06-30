@@ -1,5 +1,5 @@
 services:
-  - type: web
+  type: worker
     name: AgentHelp
     env: python
     runtime: python
