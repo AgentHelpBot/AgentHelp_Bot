@@ -3,7 +3,7 @@ services:
     name: AgentHelp
     env: python
     runtime: python
-    pythonVersion: 3.10.12
+    pythonVersion: 3.10.9
     buildCommand: pip install -r requirements.txt
     startCommand: python aviahelp_bot.py
     plan: free
