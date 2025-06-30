@@ -5,7 +5,7 @@ from airportsdata import load           # база аэропортов IATA →
 from dateutil import parser as dtparse  # умный разбор дат
 
 API_TOKEN = os.getenv("TELEGRAM_TOKEN", "PASTE_YOUR_TOKEN_HERE")
-bot = Bot(API_TOKEN)
+print(f"Loaded token: {API_TOKEN}")
 dp  = Dispatcher(bot)
 
 # ───────────────────────────────────────────────────────────────
