@@ -6,6 +6,7 @@ from dateutil import parser as dtparse  # умный разбор дат
 
 API_TOKEN = os.getenv("TELEGRAM_API_TOKEN", "PASTE_YOUR_TOKEN_HERE")
 print(f"Loaded token: {API_TOKEN}")
+bot = Bot(API_TOKEN)
 dp  = Dispatcher(bot)
 
 # ───────────────────────────────────────────────────────────────
