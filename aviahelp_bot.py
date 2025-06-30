@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from airportsdata import load           # база аэропортов IATA → данные
 from dateutil import parser as dtparse  # умный разбор дат
 
-API_TOKEN = os.getenv("TELEGRAM_TOKEN", "PASTE_YOUR_TOKEN_HERE")
+API_TOKEN = os.getenv("TELEGRAM_API_TOKEN", "PASTE_YOUR_TOKEN_HERE")
 print(f"Loaded token: {API_TOKEN}")
 dp  = Dispatcher(bot)
 
