@@ -129,6 +129,7 @@ async def handle(msg: types.Message):
                         "Пришли мне стандартные строки бронирования.")
 
 # ───────────────────────────────────────────────────────────────
-if _name_ == "_main_":
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     executor.start_polling(dp, skip_updates=True)
+
