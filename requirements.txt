@@ -1,3 +1,4 @@
+--only-binary=:all:
 wheel
 aiogram==2.25.2
 aiohttp==3.8.4
